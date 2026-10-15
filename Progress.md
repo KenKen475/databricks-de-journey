@@ -3,6 +3,7 @@
 ## Plan
 Depth-first, ~2.5 h/session. No fixed calendar dates (changed Oct 11 at Ken's request):
 progress is measured in completed plan days, not weeks.
+Minimum session on busy days: 45 min (quiz + one task) so the chain doesn't break.
 Milestones: Associate exam after plan Day ~30; start applying once capstone v1 is live.
 Target: Data Engineer roles, Toronto + US remote. Cloud-neutral until plan Week 5
 (market scan showed AWS/Azure roughly even; Databricks skills matter more than cloud).
@@ -11,12 +12,12 @@ Target: Data Engineer roles, Toronto + US remote. Cloud-neutral until plan Week 
 | Skill                    | Start | Now | Target | Evidence / notes |
 |--------------------------|-------|-----|--------|------------------|
 | SQL                      | 1.5   | 2.5 | 4   | Window functions, frames, join traps, reconciliation. Join-filter placement not yet retained |
-| Python                   | 1.5   | 1.5 | 3   | try/except utility pending (Day 3 task 4c) |
-| PySpark / Spark internals| 0     | 1   | 3.5 | groupBy/agg, joins, Window + lag. Transformations vs actions not retained |
-| Delta Lake               | 0     | 1.5 | 3.5 | CTAS, DESCRIBE DETAIL/HISTORY, UPDATE/DELETE/INSERT, RESTORE, mergeSchema, VACUUM trade-off |
+| Python                   | 1.5   | 2   | 3   | table_summary(): dict return, f-strings, try/except that keeps the loop running |
+| PySpark / Spark internals| 0     | 1   | 3.5 | groupBy/agg, joins, Window + lag. Architecture is Day 4 |
+| Delta Lake               | 0     | 2   | 3.5 | CTAS, DETAIL/HISTORY, DML, RESTORE, schema enforcement + mergeSchema, VACUUM, Parquet vs Delta on a volume |
 | Linux / Git / Docker     | 3.5   | 3.5 | 4   | Git folder workflow working |
 | Cloud (Azure + AWS)      | 1     | 1   | 2.5 | Plan Week 5 |
-| Unity Catalog            | 0     | 0.5 | 3   | catalog.schema.table; samples vs system catalog (now retained) |
+| Unity Catalog            | 0     | 1   | 3   | Namespace, system catalog, volumes; saw UC block UPDATE on a path-based Parquet table |
 | Performance tuning       | 0     | 0   | 2.5 | Has seen a join strategy in explain() |
 | Cost / FinOps            | 0     | 0   | 2.5 | |
 | DevOps (DABs, CI/CD)     | 1     | 1   | 3.5 | |
@@ -42,30 +43,31 @@ Target: Data Engineer roles, Toronto + US remote. Cloud-neutral until plan Week 
 - Learned: grain, F vs Window, withColumn, lazy evaluation
 - Quiz: 70%. Scenario: 4/10
 
-### Day 3 (Oct 11) — partially complete
+### Day 3 (Oct 11 + Oct 13)
 - Done: orders_1998 CTAS (668,101 rows; Delta, 3 files, ~14.9 MB);
-  UPDATE 97,175 / DELETE 133,941 / INSERT 3,094 rows (all plausible);
-  accidental DELETE recovered with RESTORE to v3; mergeSchema (old rows = NULL)
+  UPDATE 97,175 / DELETE 133,941 / INSERT 3,094 rows;
+  accidental DELETE recovered with RESTORE to v3; schema enforcement error
+  (DELTA_METADATA_MISMATCH) then mergeSchema (old rows = NULL);
+  table_summary() with try/except; Parquet vs Delta on a volume
+  (UPDATE on Parquet rejected: UC_COMMAND_NOT_SUPPORTED)
 - Learned: Delta = Parquet + transaction log; RESTORE adds a version (audit trail kept);
-  VACUUM ends time travel to removed files; retention = cost vs recovery window
-- Quiz: ~60% (missed: LEFT JOIN filter placement, transformations vs actions; partial on F)
-- Scenario (silver.customers -40%): 6.5/10, up from 4/10. Structure now used correctly.
-  Gaps: restored before proving; reran without a root cause; check didn't block publication
-- Concept gaps closed by explanation: Parquet/file formats, where Delta sits in the stack,
-  medallion architecture
+  VACUUM ends time travel to removed files; columnar formats; medallion layers
+- Quiz: ~60%. Scenario (silver.customers -40%): 6.5/10, up from 4/10
+- **Unresolved:** post-restore count was 537,328, expected 537,254 (74 rows off).
+  Reported as "got the answer" without comparing to the expected value.
 
 ## Weak spots (carry forward)
-- Partial submissions: 4th session in a row with items missing (Day 3: 3d count, 4a, 4c)
+- Comparing actual vs expected: 3d declared done with a 74-row mismatch
 - Retention: LEFT JOIN filter placement (taught Day 2, missed Day 3 quiz); actions vs transformations
 - Incidents: prove with data before changing anything; find root cause before rerunning
+- Submissions: much better on Oct 13 (all items sent). Still paste outputs, since Git doesn't store them
 
 ## Open items
-- [ ] 3d: reconciled count after RESTORE (expected 537,254)
-- [ ] 4a: error class + explanation
-- [ ] 4c: table_summary with try/except, output
-- [ ] Day 3B: Parquet vs Delta on a volume
+- [ ] Explain the 74-row difference in orders_1998 (version-by-version counts)
+- [ ] 3B Q3: read add/remove actions in _delta_log for the UPDATE
+- [ ] Paste table_summary() output
 - [ ] Markdown headers on Day 1 notebook cells (deferred)
 
 ## Next session
-Day 3B wrap-up, then Day 4: Spark architecture (driver, executors, partitions,
-jobs/stages/tasks, shuffles, actions vs transformations) + reading explain() and the query profile
+Day 4: Spark architecture (driver, executors, partitions, jobs/stages/tasks,
+narrow vs wide transformations, shuffles) + reading explain() and the query profile
