@@ -67,3 +67,4 @@ Target: Data Engineer roles, Toronto + US remote. Cloud-neutral until plan Week 
 
 ## Next session
 Day 4B (~45 min), then the Week 1 checkpoint (closed-book, scored /100; need 70% to advance)
+Fix A 11.8 s / 30M shuffled vs Fix B 2.7 s / 7.5M — aggregate before the shuffle.
