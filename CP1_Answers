@@ -1,0 +1,137 @@
+Total time taken:
+Start time : 10:00 PM
+Section A completed at : 10:05 PM
+
+A1:B   A2:C   A3:D   A4:A   A5:A   A6:B   A7:C   A8:B   A9:A   A10:C
+
+Start Time for Section B : 
+End time for Section B: 
+B1 query:
+%SQL
+
+WITH customer_spend AS (
+    SELECT c.c_custkey, n.n_name, SUM(o.o_totalprice) AS total_spend
+    FROM samples.tpch.orders AS o
+    JOIN samples.tpch.customer AS c
+    ON o.o_custkey = c.c_custkey
+    JOIN samples.tpch.nation AS n
+    ON c.c_nationkey = n.n_nationkey
+    GROUP BY c.c_custkey, n.n_name
+),
+ranked_customers AS(
+    SELECT n_name, c_custkey, total_spend,
+    ROW_NUMBER() OVER(PARTITION BY n_name ORDER BY total_spend DESC, c_custkey) AS rank_in_nation
+    FROM customer_spend
+)
+SELECT n_name, c_custkey, total_spend, rank_in_nation
+FROM ranked_customers
+WHERE rank_in_nation <=2
+ORDER BY n_name, rank_in_nation, c_custkey
+
+B1 first 6 rows:
+
+ALGERIA	365485	6326403.42	1
+ALGERIA	170077	6248989.88	2
+ARGENTINA	30652	6229541.91	1
+ARGENTINA	582538	6076442.46	2
+BRAZIL	172696	6326976.13	1
+BRAZIL	20551	6191793.22	2
+
+B1 expected rows + reason: 50 rows + I did count distinct nations in nation table and figured out that I can expect 50 rows         actual rows: 50
+
+B2a query + chosen customer:
+
+SELECT c.c_custkey, o.o_orderdate, count(o.o_orderkey) AS total_orders
+FROM samples.tpch.customer AS c
+JOIN samples.tpch.orders AS o
+ON c.c_custkey = o.o_custkey
+GROUP BY c.c_custkey, o.o_orderdate
+ORDER BY total_orders DESC
+LIMIT 10;
+
+Customer Number choosen : 87499
+
+B2b query:
+
+%sql
+SELECT o_orderdate, o_orderkey, o_totalprice, 
+SUM(o_totalprice) OVER (ORDER BY o_orderdate, o_orderkey ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS row_total, 
+SUM(o_totalprice) OVER(ORDER BY o_orderdate RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ) AS range_total,
+LAG(o_orderdate) OVER(PARTITION BY o_custkey ORDER BY o_orderdate,o_orderkey) AS prev_order_date,
+DATEDIFF(o_orderdate,prev_order_date) as days_since_prev
+FROM samples.tpch.orders
+WHERE o_custkey = 87499
+ORDER BY o_orderdate, o_orderkey;
+
+
+B2b output:
+
+o_orderdate	o_orderkey	o_totalprice	row_total	range_total	prev_order_date	days_since_prev
+1992-02-19	27505089	77451.73	77451.73	77451.73	-	null
+1992-04-06	14051011	86276.58	163728.31	163728.31	1992-02-19	47
+1992-09-12	13980768	116081.45	279809.76	279809.76	1992-04-06	159
+1992-10-27	15190311	171937.10	451746.86	451746.86	1992-09-12	45
+1993-04-25	22027079	336974.53	788721.39	788721.39	1992-10-27	180
+1994-03-12	25116546	40689.30	829410.69	829410.69	1993-04-25	321
+1994-04-12	2700448	44111.81	873522.50	873522.50	1994-03-12	31
+1994-06-01	9547713	34055.41	907577.91	907577.91	1994-04-12	50
+1994-06-12	13180643	233890.54	1141468.45	1141468.45	1994-06-01	11
+1994-08-26	971300	304418.10	1445886.55	1445886.55	1994-06-12	75
+1994-11-24	6231623	100111.47	1545998.02	1545998.02	1994-08-26	90
+1996-01-30	19216837	18486.04	1564484.06	1564484.06	1994-11-24	432
+1996-03-11	12553730	110365.25	1674849.31	1674849.31	1996-01-30	41
+1996-03-26	24410756	223713.85	1898563.16	1898563.16	1996-03-11	15
+1996-05-17	6095523	275869.04	2174432.20	2174432.20	1996-03-26	52
+1996-05-20	23463556	56910.48	2231342.68	2231342.68	1996-05-17	3
+1996-09-21	97315	119019.86	2350362.54	2350362.54	1996-05-20	124
+1996-11-21	13602721	88896.80	2439259.34	2439259.34	1996-09-21	61
+1997-01-17	10780421	262626.86	2701886.20	2701886.20	1996-11-21	57
+1997-02-08	10856998	268990.40	2970876.60	2970876.60	1997-01-17	22
+1997-08-22	6019906	160094.36	3130970.96	3130970.96	1997-02-08	195
+1997-09-17	7984097	203285.83	3334256.79	3334256.79	1997-08-22	26
+1998-01-22	17382113	307268.11	3641524.90	3641524.90	1997-09-17	127
+1998-02-18	4958853	294339.81	3935864.71	4060813.78	1998-01-22	27
+1998-02-18	17551875	105851.22	4041715.93	4060813.78	1998-02-18	0
+1998-02-18	20110881	19097.85	4060813.78	4060813.78	1998-02-18	0
+1998-04-28	28520896	176562.00	4237375.78	4237375.78	1998-02-18	69
+
+B2b which rows differ + why:
+
+Row 24 and 25 differ, on that day this customer had 3 orders, row total is a grain of each order and range total is a grain of order date for that customer.
+
+B2c expected vs actual:
+Expected: 
+SELECT SUM(o_totalprice) FROM samples.tpch.orders
+WHERE o_custkey = 87499;
+
+Output: 4237375.78
+
+Actual is the last row value of row_total : 4237375.78
+
+B3 query: 
+B3 output:
+B3 reconciliation 1 (orders) expected vs actual:
+B3 reconciliation 2 (revenue) expected vs actual:
+B3 reconciliation 3 (line items) expected vs actual:
+
+C1 code:
+C1 output:
+C1 Q1 (which line ran Spark + why):
+C1 Q2 (expected sum vs actual):
+C1 Q3 (no-partition Window):
+
+C2a bad version + rows changed:
+C2b queries + before vs current numbers:
+C2c recovery command + expected vs actual revenue:
+C2d history + auditor:
+
+D1:
+D2:
+D3:
+D4:
+D5:
+D6:
+
+E:
+
+Errors hit (full text), or "none":
