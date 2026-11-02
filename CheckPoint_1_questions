@@ -1,0 +1,172 @@
+Week 1 checkpoint
+
+Started: 9:53 PM. Suggested pace:
+
+A: 10 min
+B: 30 min
+C: 20 min
+D: 10 min
+E: 15 min
+
+Closed-book. Databricks is allowed only for Sections B and C. Answer every part.
+
+Section A: Concepts (20 points, 2 each, no Databricks)
+
+A1. A Delta table consists of:
+A) Parquet files only B) Parquet files plus a transaction log C) JSON files plus a Parquet index D) ORC files plus the metastore
+
+A2. At version 5, someone runs DELETE with no WHERE clause. You run RESTORE TABLE t TO VERSION AS OF 4. What does DESCRIBE HISTORY t now show?
+A) Versions 0–4 only B) Versions 0–5 C) Versions 0–6, where version 6 is the RESTORE D) Versions 0–4, with the DELETE marked as undone
+
+A3. Which of these is a wide transformation?
+A) filter B) withColumn C) select D) groupBy
+
+A4. You write SUM(x) OVER (PARTITION BY c ORDER BY d) with no frame clause. Two rows in the same partition have the same d. Their results:
+A) Differ; each includes only rows up to itself B) Are equal, and both include both rows C) Are NULL D) Cause an error
+
+A5. For the values 700, 700, 400 (ordered descending), what is the DENSE_RANK of 400?
+A) 2 B) 3 C) 1 D) 4
+
+A6. Which layer should deduplicate records and enforce correct data types?
+A) Bronze B) Silver C) Gold D) The system catalog
+
+A7. df = spark.table("big").filter(...).withColumn(...) finishes in 0.002 seconds on a 2-billion-row table. Why?
+A) The data was cached B) filter is a narrow transformation C) Transformations only build a plan; no data is read until an action runs D) Photon is very fast
+
+A8. What is the default retention period for VACUUM?
+A) 24 hours B) 7 days C) 30 days D) Unlimited
+
+A9. An append to a Delta table fails with DELTA_METADATA_MISMATCH, because your DataFrame has one extra column. You intend to add that column. The best fix for this write:
+A) .mode("overwrite") B) .option("mergeSchema", "true") C) Run VACUUM first D) RESTORE the table first
+
+A10. You need every customer, plus their 1997 orders, including customers with no 1997 orders. Which is correct?
+A) FROM customer c JOIN orders o ON c.c_custkey = o.o_custkey WHERE YEAR(o.o_orderdate) = 1997
+B) FROM customer c LEFT JOIN orders o ON c.c_custkey = o.o_custkey WHERE YEAR(o.o_orderdate) = 1997
+C) FROM customer c LEFT JOIN orders o ON c.c_custkey = o.o_custkey AND YEAR(o.o_orderdate) = 1997
+D) FROM orders o LEFT JOIN customer c ON o.o_custkey = c.c_custkey AND YEAR(o.o_orderdate) = 1997
+
+Section B: SQL (25 points, Databricks allowed)
+
+Use samples.tpch and put each query in its own cell in checkpoint_week1. Paste every query and the requested output.
+
+B1. Top customers per nation (8 points)
+
+For each nation, return the top 2 customers by total spend, where total spend is the sum of o_totalprice across all of a customer’s orders.
+
+Columns: n_name, c_custkey, total_spend, rank_in_nation
+Ties must be handled deterministically
+Order the output by n_name, then rank_in_nation
+
+Paste the first 6 rows of output. Then show the expected number of rows (with a one-line reason) and the actual row count, using COUNT(*).
+
+B2. Running totals and gaps for one customer (9 points)
+
+(a) 2 points. Write a query that finds customers who placed 2 or more orders on the same date. Pick one of those customers for parts (b) and (c).
+(b) 5 points. For that customer, return every order with these columns:
+o_orderdate, o_orderkey, o_totalprice
+rows_total: a running total, one order at a time, with ties handled
+range_total: a running total that treats same-date orders as one step
+prev_order_date
+days_since_prev
+Paste the output. Then, in one sentence, identify the rows where rows_total and range_total differ and explain why.
+(c) 2 points. Prove that the final rows_total is correct, by showing expected vs. actual.
+
+B3. Order priority report for Finance (8 points)
+
+For orders placed in 1997, return one row per o_orderpriority with these columns:
+
+order_count
+total_revenue: the sum of o_totalprice
+line_item_count: the total number of line items in those orders
+
+The revenue must not be inflated. Then reconcile three totals, showing expected vs. actual for each:
+
+The sum of order_count across priorities vs. the number of 1997 orders
+The sum of total_revenue vs. the total o_totalprice of 1997 orders
+The sum of line_item_count vs. the number of line items belonging to 1997 orders
+Section C: PySpark + Delta (20 points, Databricks allowed)
+
+C1. Yearly revenue in PySpark (10 points)
+
+Use PySpark only: no spark.sql, no %sql cells. From samples.tpch.orders, compute one row per year of o_orderdate with these columns:
+
+year
+order_count
+total_revenue
+avg_order_value
+revenue_vs_prev_year: this year’s revenue minus the previous year’s revenue (use a Window)
+
+Sort the output by year.
+
+Paste the code and the output. Then answer:
+
+Which line in your code made Spark actually run? Why?
+Verify your output: what should the order_count values add up to, and do they?
+Spark may warn that your Window has no partition defined. What does that mean physically? Why is it acceptable here, and when would the same pattern be dangerous?
+
+C2. Bad update recovery (10 points)
+
+Run this setup:
+
+sql
+CREATE OR REPLACE TABLE workspace.bronze.chk_orders AS
+SELECT * FROM samples.tpch.orders
+WHERE o_orderdate BETWEEN '1996-01-01' AND '1996-03-31';
+
+-- A "bad job" runs:
+UPDATE workspace.bronze.chk_orders
+SET o_totalprice = 0
+WHERE o_orderpriority = '1-URGENT';
+
+Then:
+
+(a) 2 points. Use the table’s history to identify the bad version and the number of rows it changed. Paste the relevant values.
+(b) 3 points. Before fixing anything, prove the damage with read-only queries. Compare the current version with the version before the update on two numbers: how many rows have o_totalprice = 0, and the total revenue.
+(c) 3 points. Recover the table. Then reconcile the recovered total revenue against the original, showing expected vs. actual.
+(d) 2 points. What does the table’s history look like now? Why does that matter to an auditor?
+Section D: Reading a plan (15 points, no Databricks)
+PhotonResultStage
++- PhotonSort [c_mktsegment ASC NULLS FIRST]
+   +- PhotonShuffleExchangeSource
+      +- PhotonShuffleMapStage ENSURE_REQUIREMENTS
+         +- PhotonShuffleExchangeSink rangepartitioning(c_mktsegment ASC NULLS FIRST, 200)
+            +- PhotonGroupingAgg(keys=[c_mktsegment], functions=[finalmerge_count(merge count) AS count(1)])
+               +- PhotonShuffleExchangeSource
+                  +- PhotonShuffleMapStage ENSURE_REQUIREMENTS
+                     +- PhotonShuffleExchangeSink hashpartitioning(c_mktsegment, 200)
+                        +- PhotonGroupingAgg(keys=[c_mktsegment], functions=[partial_count(1) AS count])
+                           +- PhotonProject [c_mktsegment]
+                              +- PhotonShuffledHashJoin [o_custkey], [c_custkey], Inner, BuildRight
+                                 :- PhotonShuffleExchangeSource
+                                 :  +- PhotonShuffleMapStage ENSURE_REQUIREMENTS
+                                 :     +- PhotonShuffleExchangeSink hashpartitioning(o_custkey, 200)
+                                 :        +- PhotonScan parquet samples.tpch.orders[o_custkey, o_orderstatus]
+                                 :           DataFilters: [isnotnull(o_orderstatus), (o_orderstatus = F), isnotnull(o_custkey)]
+                                 :           ReadSchema: struct<o_custkey:bigint,o_orderstatus:string>
+                                 +- PhotonShuffleExchangeSource
+                                    +- PhotonShuffleMapStage ENSURE_REQUIREMENTS
+                                       +- PhotonShuffleExchangeSink hashpartitioning(c_custkey, 200)
+                                          +- PhotonScan parquet samples.tpch.customer[c_custkey, c_mktsegment]
+                                             DataFilters: [isnotnull(c_custkey)]
+                                             ReadSchema: struct<c_custkey:bigint,c_mktsegment:string>
+D1 (3 points). Write the SQL query this plan most likely came from.
+D2 (4 points). How many exchanges does the plan contain? For each one, give its partitioning and the part of the query that caused it.
+D3 (2 points). Where is the WHERE condition actually applied? Name the optimization, and say why it helps.
+D4 (2 points). Explain partial_count → finalmerge_count, and why this pattern makes the groupBy shuffle cheap.
+D5 (2 points). customer has 750,000 rows and orders has 7.5 million. At runtime, Adaptive Query Execution may switch this join to a broadcast join. Why? Which exchange or exchanges would disappear?
+D6 (2 points). c_mktsegment has only 5 distinct values, but the groupBy exchange uses 200 partitions. At most how many of those partitions can hold data? Why is that not a skew problem in this query?
+Section E: Production scenario (20 points, no Databricks)
+
+Monday, 7:10 AM. The nightly job silver_orders_load ran at 2 AM and reported success. The gold table gold.daily_revenue, built from silver.orders, shows Sunday’s revenue at 2.1x Saturday’s. A typical Sunday is about 0.9x Saturday. The CFO’s dashboard refreshes at 8:00 AM.
+
+Two facts you learn quickly:
+
+Last Friday, a teammate changed the bronze → silver logic so that each run re-processes the last 3 days of source files, “to catch late-arriving data.”
+silver.orders is written with .mode("append").
+
+Answer using Contain → Diagnose → Prove → Fix → Prevent → Communicate, about 6–8 sentences in total.
+
+Name your hypothesis explicitly.
+Include at least two specific queries or commands.
+Separate the fast fix from the proper fix.
+Include the exact words you’d send to the teammate.
