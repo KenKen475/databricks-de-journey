@@ -11,18 +11,18 @@ Target: Data Engineer roles, Toronto + US remote. Cloud-neutral until plan Week 
 ## Skills matrix (1–5)
 | Skill                    | Start | Now | Target | Evidence / notes |
 |--------------------------|-------|-----|--------|------------------|
-| SQL                      | 1.5   | 2.5 | 4   | Window functions, frames, join traps, reconciliation |
+| SQL                      | 1.5   | 3   | 4   | Checkpoint B 22/25: per-customer grain before ranking, tiebreakers, ROWS vs RANGE, fan-out-free report, 3 reconciliations |
 | Python                   | 1.5   | 2   | 3   | table_summary(): dict return, f-strings, try/except |
-| PySpark / Spark internals| 0     | 1.5 | 3.5 | Partitions, repartition, exchanges, broadcast vs shuffled join. Lazy evaluation explained wrongly in 4a |
-| Delta Lake               | 0     | 2   | 3.5 | DML, RESTORE, schema enforcement, VACUUM; read _delta_log incl. deletion vectors |
+| PySpark / Spark internals| 0     | 2   | 3.5 | Checkpoint C1 10/10 (groupBy, Window lag, lazy evaluation). Plan reading: labels exchanges; AQE/skew "why" still thin |
+| Delta Lake               | 0     | 2.5 | 3.5 | Checkpoint C2 8/10: history, prove-before-fix with VERSION AS OF, RESTORE + reconcile |
 | Linux / Git / Docker     | 3.5   | 3.5 | 4   | Git folder workflow working |
 | Cloud (Azure + AWS)      | 1     | 1   | 2.5 | Plan Week 5 |
 | Unity Catalog            | 0     | 1   | 3   | Namespace, system catalog, volumes |
-| Performance tuning       | 0     | 1   | 2.5 | Query profile (time, rows, hottest operator); skew via repartition by key; can't yet label exchanges unaided |
+| Performance tuning       | 0     | 1.5 | 2.5 | Query profile, measured Fix A vs Fix B, exchange labeling. Gap: AQE broadcast switch, why low-cardinality keys aren't skew after partial agg |
 | Cost / FinOps            | 0     | 0   | 2.5 | |
 | DevOps (DABs, CI/CD)     | 1     | 1   | 3.5 | |
 | Observability            | 0     | 0   | 2   | |
-| Streaming / CDC          | 0     | 0   | 2.5 | |
+| Streaming / CDC          | 0     | 0   | 2.5 | Starts Day 5 (Auto Loader) |
 | Iceberg / UniForm        | 0     | 0   | 1.5 | Knows they are open table formats like Delta |
 | AI data engineering      | 0     | 0   | 1.5 | |
 
@@ -41,30 +41,33 @@ Target: Data Engineer roles, Toronto + US remote. Cloud-neutral until plan Week 
 - _delta_log read: UPDATE on a 46,877-row file used a deletion vector (5 rows hidden)
   plus a new 3 KB file, instead of rewriting 1.8 MB. Min/max stats let Delta skip 2 of 3 files.
 
-### Day 4 (Oct 14)
-- Lazy evaluation timed: transformations 0.001s, action 1.686s
-- Partitions: as read 3 (2 x 3,387,392 + 725,216 = 7.5M); repartition(8) = 8 x 937,500;
-  repartition(8, o_orderstatus) = 3 non-empty, largest 3,654,501 / smallest 191,189
-  (matches Day 1 status counts exactly) — skew from a low-cardinality key
-- explain(): narrow plan has 0 exchanges; top_nations has 5 (2 join, 1 broadcast, groupBy, orderBy);
-  nation join = BroadcastHashJoin
-- Query profile (fan-out Fix A query): 21.4 s, 38,975,036 rows read across ALL tables;
-  hottest operators = lineitem scan (30M rows) and its shuffle
-- Quiz 92% (best so far; RESTORE answer mixed up history entries with data files)
-- Scenario (collect() on 500M rows): 5/10 — right diagnosis, no code fix, no teammate message
-- Hit DELTA_UNSUPPORTED_TIME_TRAVEL_BEYOND_DELETED_FILE_RETENTION_DURATION in practice
-- Submission: complete, used the checklist template
+### Day 4 (Oct 14) + 4B (Oct 16)
+- Lazy evaluation timed: transformations 0.001s, action 1.686s; divide-by-zero demo explained correctly
+- Partitions: repartition(8, o_orderstatus) = 3 non-empty (skew from a low-cardinality key)
+- explain(): labeled exchanges; nation join = BroadcastHashJoin
+- Fix A 11.8 s / 30M shuffled vs Fix B 2.7 s / 7.5M — aggregate before the shuffle
+- Quiz 92%. Scenario (collect() on 500M rows): 5/10
+
+### Week 1 checkpoint (started Oct 21, finished Nov 10) — 83/100, PASSED
+| Section | Score | Notes |
+|---|---|---|
+| A Concepts | 16/20 | Missed A4 (default frame = RANGE, peers share a value) and A9 (mergeSchema, not overwrite) |
+| B SQL | 22/25 | B1 7.5 (no COUNT(*) shown), B2 7.5 (two windows missing PARTITION BY), B3 7 (order reconciliation not independent) |
+| C PySpark + Delta | 18/20 | C1 10/10. C2: misidentified the bad version (OPTIMIZE vs UPDATE); compared decimal to '0' string |
+| D Plan reading | 11.5/15 | D1, D2 full marks. D5 and D6 gave the "what" without the "why" |
+| E Scenario | 15.5/20 | Strong hypothesis, dedupe proof, MERGE as proper fix, good teammate message. Missed CFO message, a blocking check, bronze comparison |
 
 ## Weak spots (carry forward)
-- Explaining *why* (4a: attributed laziness to narrow transformations; 4c: "reads fewer columns" for no-shuffle)
-- Attributing metrics to the right object (profile "rows read" is the whole query, not orders)
-- Scenario answers: include the concrete fix (code) and the people step (communication)
+- Explaining *why*: still the main gap (checkpoint D5, D6)
+- Default window frame (RANGE, peer rows): missed in two quizzes, though done correctly in practice (B2)
+- Reading DESCRIBE HISTORY precisely: name the operation that changed the data, not the latest version
+- Incidents: communicate to the business owner, not only the engineer; checks must block, not just alert
+- Gaps between sessions: checkpoint took 3 weeks end to end; retention risk
 
 ## Open items
 - [ ] 74-row difference in orders_1998: use DESCRIBE HISTORY operationMetrics (time travel now blocked)
-- [ ] Day 4B: lazy-evaluation demo, collect() fix, EXPLAIN on Fix A vs Fix B
 - [ ] Markdown headers on Day 1 notebook cells (deferred)
 
 ## Next session
-Day 4B (~45 min), then the Week 1 checkpoint (closed-book, scored /100; need 70% to advance)
-Fix A 11.8 s / 30M shuffled vs Fix B 2.7 s / 7.5M — aggregate before the shuffle.
+Day 5: Auto Loader into bronze (simulated file feed on a volume, checkpoint idempotency,
+schema drift), plus a short catch-up quiz on the checkpoint misses
